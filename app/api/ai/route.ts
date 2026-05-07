@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const OPENROUTER_API_KEY = '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';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const MODEL = 'anthropic/claude-sonnet-4-5';
 const MAX_TOKENS = 1200;
 
