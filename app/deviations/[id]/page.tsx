@@ -450,43 +450,75 @@ export default function DeviationDetail() {
                   </div>
                 </div>
 
-                {Array.isArray(rootCauses) && dev.root_cause_method === '5Why' && (
+                {/* 5Why редактируемый */}
+                {dev.root_cause_method === '5Why' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {rootCauses.map((rc, i) => (
+                    {(Array.isArray(rootCauses) ? rootCauses : [{level:1,why:'',answer:''},{level:2,why:'',answer:''},{level:3,why:'',answer:''},{level:4,why:'',answer:''},{level:5,why:'',answer:''}]).map((rc, i) => (
                       <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                         <div style={{ width: 28, height: 28, borderRadius: '50%', background: rc.answer ? 'var(--accent)' : 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: rc.answer ? 'white' : 'var(--text-muted)', flexShrink: 0, fontFamily: 'IBM Plex Mono' }}>
                           {i + 1}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          {rc.why && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>{rc.why}</div>}
-                          {rc.answer ? (
-                            <div style={{ fontSize: 14, color: 'var(--text-primary)', padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 8, borderLeft: '2px solid var(--accent)' }}>{rc.answer}</div>
-                          ) : (
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 14px', background: 'var(--bg-elevated)', borderRadius: 8 }}>Расследование в процессе...</div>
-                          )}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <input className="input" placeholder={`Почему ${i + 1}?`} defaultValue={rc.why} style={{ fontSize: 13, fontWeight: 600 }}
+                            onBlur={async (e) => {
+                              const causes = Array.isArray(rootCauses) ? [...rootCauses] : [{level:1,why:'',answer:''},{level:2,why:'',answer:''},{level:3,why:'',answer:''},{level:4,why:'',answer:''},{level:5,why:'',answer:''}];
+                              causes[i] = { ...causes[i], why: e.target.value };
+                              await fetch(`/api/deviations/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root_causes: JSON.stringify(causes) }) });
+                            }} />
+                          <input className="input" placeholder="Ответ / причина..." defaultValue={rc.answer}
+                            onBlur={async (e) => {
+                              const causes = Array.isArray(rootCauses) ? [...rootCauses] : [{level:1,why:'',answer:''},{level:2,why:'',answer:''},{level:3,why:'',answer:''},{level:4,why:'',answer:''},{level:5,why:'',answer:''}];
+                              causes[i] = { ...causes[i], answer: e.target.value };
+                              const updated = await fetch(`/api/deviations/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root_causes: JSON.stringify(causes) }) }).then(r => r.json());
+                              setDev(updated);
+                            }} />
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {!Array.isArray(rootCauses) && rootCauses && (rootCauses as unknown as { effect?: string; causes?: Record<string, string[]> }).causes && (
+                {/* Fishbone редактируемый */}
+                {dev.root_cause_method === 'Fishbone' && (
                   <div>
-                    <div style={{ marginBottom: 16, padding: '12px 16px', background: 'var(--critical-bg)', border: '1px solid var(--critical-border)', borderRadius: 8 }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Следствие</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--critical)' }}>{(rootCauses as unknown as { effect: string }).effect}</div>
+                    <div style={{ marginBottom: 16 }}>
+                      <label className="label">Следствие (проблема)</label>
+                      <input className="input" placeholder="Опишите проблему/следствие..." defaultValue={!Array.isArray(rootCauses) && (rootCauses as unknown as {effect?:string}).effect || ''}
+                        onBlur={async (e) => {
+                          const current = !Array.isArray(rootCauses) && rootCauses ? rootCauses as unknown as {effect:string;causes:Record<string,string[]>} : {effect:'',causes:{Equipment:[],Environment:[],Method:[],People:[],Materials:[]}};
+                          const updated = await fetch(`/api/deviations/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root_causes: JSON.stringify({...current, effect: e.target.value}) }) }).then(r => r.json());
+                          setDev(updated);
+                        }} />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      {Object.entries((rootCauses as unknown as { causes: Record<string, string[]> }).causes).map(([category, items]) => (
-                        <div key={category} style={{ padding: 14, background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.3 }}>{category}</div>
-                          {items.map((item, i) => (
-                            <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4, display: 'flex', gap: 6 }}>
-                              <span style={{ color: 'var(--text-muted)' }}>·</span> {item}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
+                      {['Equipment', 'Environment', 'Method', 'People', 'Materials'].map(category => {
+                        const fishbone = !Array.isArray(rootCauses) && rootCauses ? rootCauses as unknown as {effect:string;causes:Record<string,string[]>} : {effect:'',causes:{}};
+                        const items = fishbone.causes?.[category] || [];
+                        return (
+                          <div key={category} style={{ padding: 14, background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.3 }}>{category}</div>
+                            {items.map((item: string, i: number) => (
+                              <input key={i} className="input" style={{ marginBottom: 6, fontSize: 12 }} defaultValue={item}
+                                onBlur={async (e) => {
+                                  const fb = !Array.isArray(rootCauses) && rootCauses ? {...(rootCauses as unknown as {effect:string;causes:Record<string,string[]>})} : {effect:'',causes:{Equipment:[],Environment:[],Method:[],People:[],Materials:[]}};
+                                  const newItems = [...(fb.causes[category] || [])];
+                                  newItems[i] = e.target.value;
+                                  fb.causes = {...fb.causes, [category]: newItems};
+                                  const updated = await fetch(`/api/deviations/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root_causes: JSON.stringify(fb) }) }).then(r => r.json());
+                                  setDev(updated);
+                                }} />
+                            ))}
+                            <button onClick={async () => {
+                              const fb = !Array.isArray(rootCauses) && rootCauses ? {...(rootCauses as unknown as {effect:string;causes:Record<string,string[]>})} : {effect:'',causes:{Equipment:[],Environment:[],Method:[],People:[],Materials:[]}};
+                              fb.causes = {...fb.causes, [category]: [...(fb.causes[category] || []), '']};
+                              const updated = await fetch(`/api/deviations/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root_causes: JSON.stringify(fb) }) }).then(r => r.json());
+                              setDev(updated);
+                            }} style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>
+                              + добавить причину
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
