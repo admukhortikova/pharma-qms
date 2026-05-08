@@ -88,6 +88,9 @@ export default function DeviationDetail() {
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [newCapaTask, setNewCapaTask] = useState({ title: '', type: 'Corrective', assigned_to: '', due_date: '', effectiveness_metric: '', description: '' });
+  const [showAddCapa, setShowAddCapa] = useState(false);
+  const [rootCauseMethod, setRootCauseMethod] = useState('');
 
   useEffect(() => {
     fetch(`/api/deviations/${id}`)
@@ -185,6 +188,28 @@ export default function DeviationDetail() {
   const capaTasks: CAPATask[] = (() => { try { return JSON.parse(dev.capa_plan || '[]'); } catch { return []; } })();
   const comments: Comment[] = (() => { try { return JSON.parse(dev.comments || '[]'); } catch { return []; } })();
   const nextStatuses = STATUS_TRANSITIONS[dev.status] || [];
+  const addManualCapa = async () => {
+    if (!dev || !newCapaTask.title) return;
+    const tasks = [...capaTasks, { ...newCapaTask, id: `capa-manual-${Date.now()}`, status: 'Open', priority: 'Medium' }];
+    const updated = await fetch(`/api/deviations/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ capa_plan: JSON.stringify(tasks) }),
+    }).then(r => r.json());
+    setDev(updated);
+    setNewCapaTask({ title: '', type: 'Corrective', assigned_to: '', due_date: '', effectiveness_metric: '', description: '' });
+    setShowAddCapa(false);
+  };
+
+  const updateCapaStatus = async (taskId: string, status: string) => {
+    if (!dev) return;
+    const tasks = capaTasks.map(t => t.id === taskId ? { ...t, status } : t);
+    const updated = await fetch(`/api/deviations/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ capa_plan: JSON.stringify(tasks) }),
+    }).then(r => r.json());
+    setDev(updated);
+  };
+
   const isOverdue = dev.due_date && dev.status !== 'Closed' && new Date(dev.due_date) < new Date();
 
   return (
@@ -413,6 +438,16 @@ export default function DeviationDetail() {
                   <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                     Анализ корневых причин — {dev.root_cause_method}
                   </h3>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {['5Why', 'Fishbone'].map(method => (
+                      <button key={method} onClick={async () => {
+                        const updated = await fetch(`/api/deviations/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root_cause_method: method }) }).then(r => r.json());
+                        setDev(updated);
+                      }} style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontFamily: 'Manrope', fontWeight: 600, border: `1px solid ${dev.root_cause_method === method ? 'var(--accent)' : 'var(--border)'}`, background: dev.root_cause_method === method ? 'var(--accent-light)' : 'transparent', color: dev.root_cause_method === method ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                        {method}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {Array.isArray(rootCauses) && dev.root_cause_method === '5Why' && (
@@ -585,9 +620,72 @@ export default function DeviationDetail() {
                           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{task.effectiveness_metric}</div>
                         </div>
                       )}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        {task.status !== 'In Progress' && task.status !== 'Completed' && (
+                          <button onClick={() => updateCapaStatus(task.id, 'In Progress')} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(245,158,11,0.3)', background: 'var(--warning-bg)', color: 'var(--warning)', cursor: 'pointer', fontFamily: 'Manrope' }}>
+                            → В работу
+                          </button>
+                        )}
+                        {task.status !== 'Completed' && (
+                          <button onClick={() => updateCapaStatus(task.id, 'Completed')} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(16,185,129,0.3)', background: 'var(--success-bg)', color: 'var(--success)', cursor: 'pointer', fontFamily: 'Manrope' }}>
+                            ✓ Выполнено
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </>
+              )}
+
+              {/* Кнопка добавить вручную */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setShowAddCapa(!showAddCapa)} className="btn-secondary" style={{ fontSize: 13 }}>
+                  + Добавить задачу вручную
+                </button>
+              </div>
+
+              {/* Форма ручного добавления */}
+              {showAddCapa && (
+                <div className="card" style={{ padding: 24 }}>
+                  <h3 style={{ margin: '0 0 16px', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Новая CAPA задача</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <label className="label">Название *</label>
+                      <input className="input" placeholder="Название корректирующего действия" value={newCapaTask.title} onChange={e => setNewCapaTask(p => ({ ...p, title: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="label">Описание</label>
+                      <textarea className="input" rows={2} placeholder="Детальное описание действия" value={newCapaTask.description} onChange={e => setNewCapaTask(p => ({ ...p, description: e.target.value }))} style={{ resize: 'vertical' }} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div>
+                        <label className="label">Тип</label>
+                        <select className="input" value={newCapaTask.type} onChange={e => setNewCapaTask(p => ({ ...p, type: e.target.value }))}>
+                          <option value="Corrective">Корректирующее</option>
+                          <option value="Preventive">Предупреждающее</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Ответственный</label>
+                        <input className="input" placeholder="ФИО / должность" value={newCapaTask.assigned_to} onChange={e => setNewCapaTask(p => ({ ...p, assigned_to: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div>
+                        <label className="label">Срок</label>
+                        <input type="date" className="input" value={newCapaTask.due_date} onChange={e => setNewCapaTask(p => ({ ...p, due_date: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label">Метрика эффективности</label>
+                        <input className="input" placeholder="Как измерим успех" value={newCapaTask.effectiveness_metric} onChange={e => setNewCapaTask(p => ({ ...p, effectiveness_metric: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button onClick={() => setShowAddCapa(false)} className="btn-secondary" style={{ fontSize: 13 }}>Отмена</button>
+                      <button onClick={addManualCapa} className="btn-primary" style={{ fontSize: 13 }}>Добавить задачу</button>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* AI Generated CAPA preview */}

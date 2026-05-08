@@ -36,6 +36,7 @@ export default function NewDeviation() {
     related_sop: '',
     assigned_to: '',
     due_date: '',
+    links: '',
   });
   const [aiResult, setAiResult] = useState<AIClassification | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -209,6 +210,11 @@ export default function NewDeviation() {
                     <label className="label">SOP</label>
                     <input className="input" placeholder="SOP-PRD-042, SOP-QC-011" value={form.related_sop} onChange={e => set('related_sop', e.target.value)} />
                   </div>
+                </div>
+                <div>
+                  <label className="label">Вложения / ссылки</label>
+                  <textarea className="input" rows={3} placeholder="Ссылки на документы, протоколы, фото&#10;Например: https://docs.company.com/protocol-123&#10;или: Протокол анализа AB2025-034.pdf, Фото оборудования.jpg" value={form.links} onChange={e => set('links', e.target.value)} style={{ resize: 'vertical' }} />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Каждая ссылка или файл с новой строки</div>
                 </div>
               </div>
             </div>
